@@ -24,6 +24,9 @@ y = weekly_data.ix[:,-1]
 random_seed = 1
 np.random.seed(random_seed)
 
+# get_k_fold_ind returns indices of an array to be used to split
+# an array into k folds. get_k_fold_ind takes n, the length of the array,
+# k, the number folds, and prop, a length k-1 array of proportions of each of the k folds.
 def get_k_fold_ind(n, k, prop):
     if len(prop)  != k - 1:
         raise ValueError("Passed k and len(prop) disagree. len(prop) must equal k - 1.")
@@ -38,7 +41,8 @@ def get_k_fold_ind(n, k, prop):
     # Could also use np.split...
     return ret
 
-
+# model_fit_score takes an sklearn model, and X and y training and test
+# sets to fit and score the model
 def model_fit_score(model, X_train, X_test, y_train, y_test):
     model.fit(X_train, y_train)
     return model.score(X_test, y_test)
@@ -56,6 +60,8 @@ def train_test_split(X, y, test_size):
     test_idx = idx[1]
     return X.ix[train_idx], X.ix[test_idx], y.ix[train_idx], y.ix[test_idx]
 
+# test_models fits each of LogReg, LDA, QDA to passed
+# predictors X and respond y, and returns the score for each.
 def test_models(X, y, repeat_x):
     scores = pd.DataFrame(columns=['LogReg', 'LDA', 'QDA'])
     for i in range(0, repeat_x):
@@ -72,6 +78,106 @@ def test_models(X, y, repeat_x):
         i_test_run = pd.DataFrame([[lr_score, lda_score, qda_score]], columns=['LogReg', 'LDA', 'QDA'])
         scores = scores.append(i_test_run, ignore_index=True)
     return scores
+
+# get_model_err returns the squared error by fitting a least
+# squared model on predictors x_train and y_train, then testing
+# and scoring against the passed y_train and y_test
+def get_model_err(x_train, x_test, y_train, y_test):
+    std = standardize(x_train)
+    coef = compute_lsq_estimates(x_train, y_train)
+    pred = predict_lsq(x_test, std[1], std[2], coef)
+    return (y_test - pred)**2
+
+# compute_lin_quad_cubic_quartic_loocv takes x, predictors, and y, response,
+# and returns the fitting linear regression  models of order 1 to order 4 on the predictors,
+# returning lin_score, quad_score, cubic_score, quartic_score, the scores for each.
+def compute_lin_quad_cubic_quartic_loocv(x, y):
+    lin_score = 0
+    quad_score = 0
+    cubic_score = 0
+    quartic_score = 0
+
+    for i in range(0, len(x)):
+        # Delete the ith observations,
+        # which will form our x_train and y_train
+        x_train = np.delete(x, i, 0)
+        y_train = np.delete(y, i, 0)
+
+        # Get our test point
+        x_test = np.array(x[i])
+        y_test = y[i]
+
+        x_train = np.reshape(x_train, (x_train.shape[0], 1))
+        x_test = np.reshape(x_test, (x_test.shape[0], 1))
+
+        # Linear model
+        lin_test = x_test
+        lin_score = lin_score + get_model_err(x_train, lin_test, y_train, y_test)
+
+        # Quadratic model
+        quad_test = np.append(lin_test, x_test ** 2, 1)
+        quad = np.append(x_train, x_train ** 2, 1)
+        quad_score = quad_score + get_model_err(quad, quad_test, y_train, y_test)
+
+        # Cubic model
+        cubic_test = np.append(quad_test, x_test ** 3, 1)
+        cubic = np.append(quad, x_train ** 3, 1)
+        cubic_score = cubic_score + get_model_err(cubic, cubic_test, y_train, y_test)
+
+        # Quartic model
+        quartic_test = np.append(cubic_test, x_test ** 3, 1)
+        x_test = np.append(x_test, x_test ** 4, 1)
+        quartic = np.append(cubic, x_train ** 4, 1)
+        quartic_score = quartic_score + get_model_err(quartic, quartic_test, y_train, y_test)
+    return (lin_score, quad_score, cubic_score, quartic_score)
+
+# compute_k_fold_error returns the k_fold error for a passed k folds
+# fitting linear regression models of order 1 to order 4 on predictors x
+# and response y, returning lin_score, quad_score, cubic_score, quartic_score,
+# the scores for each.
+def compute_k_fold_error(k, x, y):
+    lin_score = 0
+    quad_score = 0
+    cubic_score = 0
+    quartic_score = 0
+    folds = k
+
+    prop = np.full(folds - 1, 1.0 / folds)
+    idx_sets = get_k_fold_ind(x.shape[0], folds, prop)
+    for idx in idx_sets:
+        # Remove the kth set of indices
+        # which will form our x_train and y_train
+        x_train = np.delete(x, idx, 0)
+        y_train = np.delete(y, idx, 0)
+
+        # Get our test points
+        x_test = x[idx]
+        y_test = y[idx]
+
+        x_train = np.reshape(x_train, (x_train.shape[0], 1))
+        x_test = np.reshape(x_test, (x_test.shape[0], 1))
+
+        # Linear model
+        lin_test = x_test
+        lin_score = lin_score + get_model_err(x_train, lin_test, y_train, y_test)
+
+        # Quadratic model
+        quad_test = np.append(lin_test, x_test ** 2, 1)
+        quad = np.append(x_train, x_train ** 2, 1)
+        quad_score = quad_score + get_model_err(quad, quad_test, y_train, y_test)
+
+        # Cubic model
+        cubic_test = np.append(quad_test, x_test ** 3, 1)
+        cubic = np.append(quad, x_train ** 3, 1)
+        cubic_score = cubic_score + get_model_err(cubic, cubic_test, y_train, y_test)
+
+        # Quartic model
+        quartic_test = np.append(cubic_test, x_test ** 3, 1)
+        x_test = np.append(x_test, x_test ** 4, 1)
+        quartic = np.append(cubic, x_train ** 4, 1)
+        quartic_score = quartic_score + get_model_err(quartic, quartic_test, y_train, y_test)
+    return [np.sum(score) for score in (lin_score, quad_score, cubic_score, quartic_score)]
+
 
 # Problem 1a
 scores = pd.DataFrame(columns=['LogReg', 'LDA', 'QDA'])
@@ -103,65 +209,26 @@ print(test_models(X.ix[:, 1:4], y, repeat_x))
 
 # Problem 2
 
-# Fixing random state for reproducibility
 x = np.random.randn(100)
 eps = np.random.randn(100)
 y = x - 2*x**2 + eps
 
-# plt.scatter(x, y)
-# plt.show()
+x = np.reshape(x, (x.shape[0], 1))
+y = np.reshape(y, (y.shape[0], 1))
 
-x = np.random.randn(100)
-eps = np.random.randn(100)
-y = x - 2*x**2 + eps
+# LOOCV
+print(compute_lin_quad_cubic_quartic_loocv(x, y))
 
-x = np.reshape(x,(x.shape[0], 1))
-lin_score = 0
-quad_score = 0
-cubic_score = 0
-quartic_score = 0
+# 10 Fold CV
 
-def get_model_err(x_train, x_test, y_train, y_test):
-    std = standardize(x_train)
-    print("Shapes:")
-    print(x_train.shape)
-    print(std[1].shape)
-    print(std[2].shape)
-    coef = compute_lsq_estimates(x_train, y_train)
-    pred = predict_lsq(x_test, std[1], std[2], coef)
-    return (y_test - pred)**2
+ten_fold_scores = pd.DataFrame(columns=['Linear', 'Quadratic', 'Cubic', 'Quartic'])
+for i in range(0, 5):
+    np.random.seed(i)
+    np.random.shuffle(x)
+    lin_score, quad_score, cubic_score, quartic_score = compute_k_fold_error(10, x, y)
+    i_test_run = pd.DataFrame([[lin_score, quad_score, cubic_score, quartic_score]], columns=['Linear', 'Quadratic', 'Cubic', 'Quartic'])
+    ten_fold_scores = ten_fold_scores.append(i_test_run, ignore_index=True)
 
-for i in range(0, len(x)):
-
-    # Delete the ith observations, which will form our x_train and y_train
-    x_train = np.delete(x, i)
-    y_train = np.delete(x, i)
-
-    # Get our test point
-    x_test = np.array(x[i])
-    y_test = y[i]
-
-    x_train = np.reshape(x_train,(x_train.shape[0], 1))
-    x_test = np.reshape(x_test, (x_test.shape[0], 1))
-    print(x_train.shape)
-    print(x_test.shape)
-
-    # Linear model
-    lin_score = lin_score + get_model_err(x_train, x_test, y_train, y_test)
-
-    # Quadratic model
-    x_test = np.append(x_test, x_test**2, 1)
-    quad = np.append(x_train, x_train**2, 1)
-    quad_score = quad_score + get_model_err(quad, x_test, y_train, y_test)
-
-    # Cubic model
-    x_test = np.append(x_test, x_test**3, 1)
-    cubic = np.append(quad, x_train**3, 1)
-    cubic_score = cubic_score + get_model_err(cubic, x_test, y_train, y_test)
-
-    # Quartic model
-    x_test = np.append(x_test, x_test**4, 1)
-    quartic = np.append(cubic, x_train**4, 1)
-    quartic_score = quartic_score + get_model_err(x_train, x_test, y_train, y_test)
-
-print((lin_score, quad_score, cubic_score, quartic_score))
+print(ten_fold_scores)
+ten_fold_scores.plot()
+plt.show();
