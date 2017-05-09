@@ -50,7 +50,7 @@ def predict_lsq(X_test, bar_X, std_X, hat_beta):
     # Use y_bar = b_hat_0 +  b_hat_1 * x_bar_1 + ...
     # b_hat_0 = y_bar - b_hat_1 * x_bar - .....
     X_test_stdized = (X_test - bar_X) / std_X
-    return np.sum(X_test_stdized * hat_beta[1:4]) + hat_beta[0]
+    return np.sum(X_test_stdized * hat_beta[1:]) + hat_beta[0]
 
 # compute_std_err_lsq accepts design_mat, a numpy 2-d array of predictors,
 # y, the true value associated with the predictors, and hat_y, the predictions
