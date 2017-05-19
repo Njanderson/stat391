@@ -30,6 +30,7 @@ def best_subset(X, y):
     # due to being the null model
     for i, subset_of_length in enumerate(subset_lengths_to_eval[1:]):
         best_rss = -1
+        print("Considering subset of length: " + str(len(subset_of_length[0])))
         for subset in subset_of_length:
             lin_reg.fit(X[:, subset], y)
             rss = np.sum((lin_reg.predict(X[:, subset]) - y)**2)

@@ -13,6 +13,10 @@ def standardize(X_std):
     stdized = (X_std - col_means) / std
     return (stdized, col_means, std)
 
+def standardize_with_mean_std(X_std, mean, std_dev):
+    stdized = (X_std - mean) / std_dev
+    return (stdized, mean, std_dev)
+
 # add_ones accepts M, a numpy array of arrays,
 # returning a numpy array with a column of 1's pre-appended
 def add_ones(M):

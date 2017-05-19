@@ -33,7 +33,6 @@ def best_subset(X, y):
         for subset in subset_of_length:
             lin_reg.fit(X[:, subset], y)
             rss = np.sum((lin_reg.predict(X[:, subset]) - y)**2)
-
             # Record only the best RSS value seen so far, and record the predictors used
             if best_rss == -1 or rss < best_rss:
                 best_rss = rss
@@ -61,7 +60,6 @@ def forward_stepwise(X, y):
     # Let's skip the first subset, since we know it's just the average y
     for i, subset_of_length in enumerate(subset_lengths_to_eval[1:]):
         best_rss = -1
-        print(subset_of_length)
         subset_with_curr_vars = [subset for subset in subset_of_length if set(curr_vars).issubset(subset)]
 
 
@@ -90,7 +88,6 @@ def backward_stepwise(X, y):
     subset_lengths_to_eval = [list(itertools.combinations(range(0, p_count), length)) for length in
                               range(0, p_count + 1)]
     var_in_model = np.zeros((p_count, p_count))
-    print(var_in_model)
     # Start with all vars
     curr_vars = np.arange(p_count + 1)
     rss_model = []
@@ -121,7 +118,7 @@ def compute_Cp_bic_adjR2(y, d, rss, var_err):
     bic = (1/(n*(var_err**2))) * (rss + np.log(n) * d * (var_err**2))
     y_bar = np.mean(y)
     tss = np.sum((y - y_bar)**2)
-    adj_r_sq = 1 - (rss / (n - d - 1)) * (1/ tss)
+    adj_r_sq = 1 - (rss/(n-d-1))/(tss/(n-1))
     return (cp, bic, adj_r_sq)
 
 
@@ -184,8 +181,8 @@ rss_per_method = np.array([simulated_best_subset_rss_per_model, simulated_forwar
 # Creates a 3 x 10 x 3 Array
 # The first 3 represents the 3 methods, which are in order: Best Subset Selection, Forward Stepwise Selection, and Backward Stepwise Selection
 # 10 represents the 10 different models generated different numbers of predictors from 1-10.
-cp_bic_adjR2 = np.array([[compute_Cp_bic_adjR2(y, p, rss, rss / (n - p - 1)) for p, rss in enumerate(rss_per_model)] for rss_per_model in rss_per_method])
-
+# cp_bic_adjR2 = np.array([[compute_Cp_bic_adjR2(y, p, rss, rss / (n - p - 1)) for p, rss in enumerate(rss_per_model)] for rss_per_model in rss_per_method])
+#
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
 
@@ -222,6 +219,9 @@ cols = [col for col in college_data.columns if col not in ["Unnamed: 0", "Apps"]
 X = college_data[cols]
 y = college_data["Apps"]
 
+n = np.array(X).shape[0]
+p = np.array(X).shape[1]
+print(np.array(X).shape)
 
 # Problem 2a: Forward Stepwise Selection
 
@@ -230,27 +230,36 @@ college_forward_stepwise_which_p, college_forward_stepwise_rss_per_model = forwa
 # Problem 2b: Backward Stepwise Selection
 college_backward_stepwise_which_p, college_backward_stepwise_rss_per_model = backward_stepwise(np.array(X), np.array(y))
 
+college_best_subset_selection_which_p, college_best_subset_selection_rss_per_model = best_subset(np.array(X), np.array(y))
 
-rss_per_method = np.array([college_forward_stepwise_rss_per_model, college_backward_stepwise_rss_per_model])
-cp_bic_adjR2 = np.array([[compute_Cp_bic_adjR2(y, p, rss, rss / (n - p - 1)) for p, rss in enumerate(model)] for model in rss_per_method])
+var_err = (college_best_subset_selection_rss_per_model[-1] / (n - p - 1))**0.5
 
+rss_per_method = np.array([college_forward_stepwise_rss_per_model, college_backward_stepwise_rss_per_model, college_best_subset_selection_rss_per_model])
+cp_bic_adjR2 = np.array([[compute_Cp_bic_adjR2(y, p + 1, rss, var_err) for p, rss in enumerate(model)] for model in rss_per_method])
 
 # Uncomment any of the two blocks to see its related chart
 
-# plt.title("AdjR2 Scores")
-# ax1.scatter(np.arange(1, len(college_forward_stepwise_rss_per_model)+1), cp_bic_adjR2[0,:,2], s=50, c='r', marker="o", label='Forward Stepwise Selection')
-# ax1.scatter(np.arange(1, len(college_backward_stepwise_rss_per_model)+1), cp_bic_adjR2[1,:,2], s=50, c='g', marker="x", label='Backward Stepwise Selection')
+plt.title("AdjR2 Scores")
+ax1.scatter(np.arange(1, len(college_forward_stepwise_rss_per_model)+1), cp_bic_adjR2[0,:,2], s=50, c='r', marker="o", label='Forward Stepwise Selection')
+ax1.scatter(np.arange(1, len(college_backward_stepwise_rss_per_model)+1), cp_bic_adjR2[1,:,2], s=50, c='g', marker="x", label='Backward Stepwise Selection')
+ax1.scatter(np.arange(1, len(college_best_subset_selection_rss_per_model)+1), cp_bic_adjR2[2,:,2], s=50, c='b', marker="s", label='Best Subset Selection')
+
 
 # plt.title("Cp Scores")
 # ax1.scatter(np.arange(1, len(college_forward_stepwise_rss_per_model)+1), cp_bic_adjR2[0,:,0], s=50, c='r', marker="o", label='Forward Stepwise Selection')
 # ax1.scatter(np.arange(1, len(college_backward_stepwise_rss_per_model)+1), cp_bic_adjR2[1,:,0], s=50, c='g', marker="x", label='Backward Stepwise Selection')
+# ax1.scatter(np.arange(1, len(college_best_subset_selection_rss_per_model)+1), cp_bic_adjR2[2,:,0], s=50, c='b', marker="s", label='Best Subset Selection')
+
 
 # plt.title("BIC Scores")
 # ax1.scatter(np.arange(1, len(college_forward_stepwise_rss_per_model)+1), cp_bic_adjR2[0,:,1], s=50, c='r', marker="o", label='Forward Stepwise Selection')
 # ax1.scatter(np.arange(1, len(college_backward_stepwise_rss_per_model)+1), cp_bic_adjR2[1,:,1], s=50, c='g', marker="x", label='Backward Stepwise Selection')
+# ax1.scatter(np.arange(1, len(college_best_subset_selection_rss_per_model)+1), cp_bic_adjR2[2,:,1], s=50, c='b', marker="s", label='Best Subset Selection')
 
-# plt.legend(loc='upper right')
-# plt.show()
+print(cp_bic_adjR2[:,:,2])
+
+plt.legend(loc='upper right')
+plt.show()
 
 # Problem 2a: 10-fold CV
 
